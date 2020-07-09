@@ -1,6 +1,3 @@
-DECLARE BH_START_DATE, START_DATE, END_DATE date;
-SET (BH_START_DATE, START_DATE, END_DATE) = ('{BH_START_DATE}', '{START_DATE}', '{END_DATE}');
--- SET (BH_START_DATE, START_DATE, END_DATE) = ('2019-06-01', '2019-06-01', CURRENT_DATE());
 /*
 - deduped test version
 
@@ -15,6 +12,15 @@ Common frameworks: 'job_resource_usage', 'vcs', 'build_metrics',
   'raptor', 'platform_microbench', 'talos', 'awsy',
   'browsertime', 'devtools', 'js-bench'
 */
+
+CREATE TEMP FUNCTION bh_start_date() returns date AS (
+  '{BH_START_DATE}'
+);
+
+CREATE TEMP FUNCTION major_vers(st string) AS (
+  -- '10.0' => 10
+  cast(regexp_extract(st, '(\\d+)\\.?') as int64)
+);
 
 -- Talos tests that measure release criteria
 CREATE TEMP FUNCTION isDesiredTalos(name STRING) AS (
@@ -104,7 +110,7 @@ with bh_base as
     and b.build.target.os = 'win' 
     and b.build.target.locale = 'en-US' 
     and build.source.product = 'firefox' 
-    and date(build.build.date) >= START_DATE
+    and date(build.build.date) >= bh_start_date() -- START_DATE
     -- don't want dot-versions, like 72.0.2
     and ndots(build.target.version) < 2
 )
@@ -126,7 +132,7 @@ gbv1 as
 , gbv as (
 select
   g1.*,
-  coalesce(next_release_date, END_DATE) as next_release_date
+  coalesce(next_release_date, '{END_DATE}') as next_release_date
 from gbv1 g1
 left join (
   select
@@ -145,7 +151,7 @@ left join (
     nth_version desc) as vers_ord,
   from (select day 
         from
-            unnest( GENERATE_DATE_ARRAY(BH_START_DATE, END_DATE, interval 1 day) ) as day 
+            unnest( GENERATE_DATE_ARRAY(bh_start_date(), '{END_DATE}', interval 1 day) ) as day 
     )
     days cross join gbv 
   where
@@ -224,14 +230,15 @@ left join (
   ) as def on def.taskId = perf.taskId
 WHERE
   date(perf.time) > "2019-07-01" -- min date of db
-  and date(perf.time) between START_DATE and END_DATE
+  and date(perf.time) between '{START_DATE}' and '{END_DATE}'
   and isReleaseCriteria_notime(perf.framework, project, perf.platform, s.name)
 )
 
 
 select
   b.*,
-  vers.version as bvers
+  vers.version as bvers,
+  major_vers(vers.version) as mvers
 from base b
 left join day_vers vers
   on date(b.time) = vers.day

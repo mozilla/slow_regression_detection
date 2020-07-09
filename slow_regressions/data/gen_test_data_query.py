@@ -23,13 +23,13 @@ def subdate_diff(subdate, **diff_kw):
 @click.option("--start_date", default=None)
 @click.option("--end_date", default=None)
 def fmt_test_data_query(
-    fill_yesterday=True,
+    fill_yesterday=False,
     backfill=False,
     end_date=None,
     bh_start_date=None,
     start_date=None,
 ):
-    if not backfill or fill_yesterday or start_date:
+    if not (backfill or fill_yesterday or start_date):
         raise ValueError(
             "At least specify `backfill` or `fill_yesterday`"
         )
