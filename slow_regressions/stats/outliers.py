@@ -8,7 +8,7 @@ import statsmodels.api as sm  # type: ignore
 from statsmodels.robust.scale import mad  # type: ignore
 import toolz.curried as z  # type: ignore
 
-# import slow_regressions.utils.slow_reg_utils as sru
+import slow_regressions.utils.slow_reg_utils as sru
 
 lmap = z.compose(list, map)
 
@@ -82,20 +82,22 @@ def min_abs(ab, b=None):
     return b
 
 
-def fwd_backwd_resid(s, mad=None, win_len=10):
+@sru.requires_cols(["time", "y"])
+def fwd_backwd_resid(df, mad=None, win_len=10):
     """
-    s must be sorted in time.
+    df.y must be sorted in time.
     Compute the zscore of the residuals, using both the forward and backward
     rolling medians. Then take the minimum of these 2 zscores for each
     observation. This should make it robust to level shifts,
     though mad is calculated on level-shifted medians.
     """
-    assert s.is_monotonic_increasing
-    df = pd.DataFrame({"s": s})
+    assert df.time.is_monotonic_increasing
+    df = df[["y"]]
+    # df = pd.DataFrame({"s": df.y})
     if mad is not None:
         df["mad"] = mad
 
-    df = _fwd_backwd_residz(df, "s", win_len=win_len)
+    df = _fwd_backwd_residz(df, "y", win_len=win_len)
     ret = df[["z_min"]].assign(z_mina=lambda x: x.z_min.abs())
     return ret
 
@@ -128,6 +130,7 @@ def _fwd_backwd_residz(df, colname, win_len=10):
     df["level_diffa"] = df["level_diff"].abs()
 
     return df
+
 
 # TODO: run vulture
 # def drop_outliers_zscore(y, zscore, z_thresh=4):
