@@ -163,3 +163,12 @@ def get_schema(df, as_str=False, **override):
         ["{}:{}".format(c, t) for c, t in dtype_srs.items()]
     )
     return res
+
+
+def pull_existing_dates(bq, date_field="date"):
+    q = f"""
+    select distinct {date_field}
+    from {bq.sql}
+    order by 1
+    """
+    return bq_query(q).iloc[:, 0]

@@ -147,11 +147,22 @@ def upload_model_input_data(
         project_id="moz-fx-data-shared-prod",
     ),
     replace=False,
+    skip_existing=False,
 ):
     """
     df_inp = sr.transform_model_input_data(mm.suite_plats)
     sr.upload_model_input_data(df_inp)
     """
+    if skip_existing:
+        existing_dates = (
+            bq.pull_existing_dates(bql).map(bq.to_subdate).pipe(set)
+        )
+        data_inp = data_inp.pipe(
+            lambda df: df[~df.date.isin(existing_dates)]
+        )
+        if not len(data_inp):
+            print("Nothing new to upload")
+            return
     bq.upload_cli(
         data_inp,
         bql,
@@ -169,12 +180,23 @@ def upload_model_draws(
         project_id="moz-fx-data-shared-prod",
     ),
     replace=False,
+    skip_existing=False,
 ):
     """
     draws_ul = sr.transform_model_posterior(mm.suite_plats)
     bq.upload_cli(draws_ul, bql, time_partition='date', add_schema=True,
         replace=True)
     """
+    if skip_existing:
+        existing_dates = (
+            bq.pull_existing_dates(bql).map(bq.to_subdate).pipe(set)
+        )
+        draws = draws.pipe(
+            lambda df: df[~df.date.isin(existing_dates)]
+        )
+        if not len(draws):
+            print("Nothing new to upload")
+            return
     bq.upload_cli(
         draws,
         bql,
@@ -182,6 +204,21 @@ def upload_model_draws(
         add_schema=True,
         replace=replace,
     )
+
+
+def main():
+    bv = load_beta_versions()
+    mm = me.ModelManager("/sreg/data/", "2020-07-06", bv)
+
+    # Upload input
+    df_inp = transform_model_input_data(mm.suite_plats)
+    upload_model_input_data(
+        df_inp, replace=False, skip_existing=True
+    )
+
+    # Upload samples
+    draws_ul = transform_model_posterior(mm.suite_plats)
+    upload_model_draws(draws_ul, replace=False, skip_existing=True)
 
 
 if __name__ == "__main__":
@@ -192,7 +229,7 @@ if __name__ == "__main__":
     Fire(
         {
             "load": load_write_suite_ts,
-            # "dl_raw": dl_raw,
+            "main": main,
             # "upload_model_data": upload_model_data,
         }
     )
