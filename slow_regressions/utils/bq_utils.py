@@ -1,4 +1,5 @@
 import datetime as dt
+from functools import lru_cache
 import subprocess
 import tempfile
 
@@ -6,10 +7,35 @@ import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 import pandas_gbq as pbq  # type: ignore
 
+from google.cloud.bigquery import Client
+
+analysis = "moz-fx-data-shared-prod.analysis.{}".format
+
+tables = dict(
+    test=analysis("wbeard_test_slow_regression_test_data"),
+    input_data=analysis("wbeard_slow_regression_input_data_test"),
+    samples=analysis("wbeard_slow_regression_draws_test"),
+)
+
 
 def bq_query(sql):
     "Hopefully this just works"
     return pbq.read_gbq(sql)
+
+
+@lru_cache()
+def get_client():
+    return Client(project="moz-fx-data-bq-data-science")
+
+
+def bq_query2(sql):
+    client = get_client()
+    return client.query(sql).to_dataframe()
+
+
+def bq_upload(df, table):
+    client = get_client()
+    client.load_table_from_dataframe(df, table)
 
 
 def to_subdate(d):
@@ -62,6 +88,19 @@ class BqLocation:
     @property
     def sql_dataset(self):
         return f"`{self.project_id}`.{self.dataset}"
+
+    @staticmethod
+    def from_sql(sql_str):
+        parts = sql_str.split(".")
+        if len(parts) != 3:
+            raise ValueError("`from_sql` takes 3 names separated by .")
+        project, dataset, table = parts
+        return BqLocation(table, dataset=dataset, project_id=project)
+
+
+bq_locs = {
+    k: BqLocation.from_sql(table) for k, table in tables.items()
+}
 
 
 def run_command(cmd, success_msg="Success!"):
@@ -165,10 +204,12 @@ def get_schema(df, as_str=False, **override):
     return res
 
 
-def pull_existing_dates(bq, date_field="date"):
+def pull_existing_dates(bq_loc, date_field="date", convert_to_date=False):
+    if convert_to_date:
+        date_field = f"date({date_field})"
     q = f"""
     select distinct {date_field}
-    from {bq.sql}
+    from {bq_loc.sql}
     order by 1
     """
     return bq_query(q).iloc[:, 0]

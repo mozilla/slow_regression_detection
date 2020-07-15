@@ -213,9 +213,9 @@ SELECT
   -- perf.groupSymbol,
   -- perf.recordingDate as recording_date,
 FROM
-  taskclusteretl.perfherder AS perf
+  `moz-fx-data-derived-datasets.taskclusteretl.perfherder` AS perf
 LEFT JOIN
-  taskclusteretl.perfherder_alert AS alert
+  `moz-fx-data-derived-datasets.taskclusteretl.perfherder_alert` AS alert
 ON
   perf.revision = alert.push_revision
   AND perf.framework = alert.framework
@@ -226,7 +226,7 @@ left join (
   select
     distinct taskId,
     ARRAY(SELECT mv.value from unnest(tags) as mv where mv.key = 'label')[SAFE_OFFSET(0)] as label,
-  from `taskclusteretl.task_definition`
+  from `moz-fx-data-derived-datasets.taskclusteretl.task_definition`
   ) as def on def.taskId = perf.taskId
 WHERE
   date(perf.time) > "2019-07-01" -- min date of db

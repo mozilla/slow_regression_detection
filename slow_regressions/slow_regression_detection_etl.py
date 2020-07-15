@@ -9,9 +9,9 @@ import slow_regressions.utils.bq_utils as bq
 from slow_regressions.utils import suite_utils as su
 import slow_regressions.utils.beta_versions as bv
 import slow_regressions.utils.model_eval as me
+from slow_regressions import app_dir
 
 
-here = Path(__file__).parent
 SUBDATE = str  # should be of format "%Y-%m-%d"
 default_bq_test_loc = bq.BqLocation(
     "wbeard_test_slow_regression_test_data",
@@ -21,7 +21,7 @@ default_bq_test_loc = bq.BqLocation(
 
 
 def load_beta_versions():
-    beta_fn = here / "data/daily_current_beta_version.sql"
+    beta_fn = app_dir / "data/daily_current_beta_version.sql"
     with open(beta_fn, "r") as fp:
         sql = fp.read()
     df = bq.bq_query(sql)
@@ -206,15 +206,28 @@ def upload_model_draws(
     )
 
 
-def main():
+def main(model_data_dir="/sreg/data/"):
+    import slow_regressions.data.gen_test_data_query as gtd
+
+    gtd.fmt_test_data_query(
+        bq.bq_query2,
+        start_date="2020-07-07",
+        # start_date=None,
+        ignore_existing=True,
+    )
+
+    # gen_test_data_query.py \
+    # --fill_yesterday=True | \
+    # bq query --use_legacy_sql=false \
+    # --destination_table="$DEST_TABLE" \
+    # --replace=true \
+    # --project_id=moz-fx-data-derived-datasets
     bv = load_beta_versions()
-    mm = me.ModelManager("/sreg/data/", "2020-07-06", bv)
+    mm = me.ModelManager(model_data_dir, "2020-07-06", bv)
 
     # Upload input
     df_inp = transform_model_input_data(mm.suite_plats)
-    upload_model_input_data(
-        df_inp, replace=False, skip_existing=True
-    )
+    upload_model_input_data(df_inp, replace=False, skip_existing=True)
 
     # Upload samples
     draws_ul = transform_model_posterior(mm.suite_plats)

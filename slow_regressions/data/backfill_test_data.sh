@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -o xtrace
 
-# DEST_PROJ="moz-fx-data-bq-data-science"
+export PYTHONPATH="/sreg:$PYTHONPATH"
 DEST_PROJ="moz-fx-data-shared-prod"
 TABLE_NAME="wbeard_test_slow_regression_test_data"
 DEST_TABLE="$DEST_PROJ:analysis.$TABLE_NAME"
