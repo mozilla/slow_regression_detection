@@ -8,6 +8,7 @@ library(brms)
 
 # library(here)
 
+options(mc.cores = parallel::detectCores())
 
 getScriptPath <- function(){
     cmd.args <- commandArgs()

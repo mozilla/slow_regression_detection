@@ -8,6 +8,11 @@ sys.path.insert(0, str(proj_dir))
 
 import slow_regressions.data.gen_test_data_query as gtd  # noqa
 
+"""
+cd /sreg
+py.test slow_regressions/tests/test_dates.py -s
+"""
+
 
 class NewDate(dt.date):
     "https://stackoverflow.com/a/4482067/386279"

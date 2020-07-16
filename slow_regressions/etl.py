@@ -1,23 +1,20 @@
 from pathlib import Path
-import tempfile
+
+# import tempfile
 from typing import List
 
 from fire import Fire  # type: ignore
 import pandas as pd  # type: ignore
 
+from slow_regressions import app_dir, project_dir
 import slow_regressions.utils.bq_utils as bq
 from slow_regressions.utils import suite_utils as su
 import slow_regressions.utils.beta_versions as bv
 import slow_regressions.utils.model_eval as me
-from slow_regressions import app_dir
 
+import pysnooper
 
 SUBDATE = str  # should be of format "%Y-%m-%d"
-default_bq_test_loc = bq.BqLocation(
-    "wbeard_test_slow_regression_test_data",
-    dataset="analysis",
-    project_id="moz-fx-data-shared-prod",
-)
 
 
 def load_beta_versions():
@@ -35,7 +32,10 @@ def load_beta_versions():
     return df
 
 
-def load(date: SUBDATE, bq_loc=default_bq_test_loc, history_days=365):
+def load_test_data(
+    date: SUBDATE, bq_loc=bq.bq_locs["test"], history_days=365
+):
+    print(f"date == {date}")
     assert bq.is_subdate(date)
     date_start = bq.subdate_diff(date, days=history_days)
     q = f"""
@@ -45,8 +45,7 @@ def load(date: SUBDATE, bq_loc=default_bq_test_loc, history_days=365):
     );
 
     select
-      *,
-      major_vers(bvers) as mvers
+      *
     from {bq_loc.sql}
     where
       date(time) between '{date_start}' and '{date}'
@@ -61,7 +60,7 @@ def transform_test_data(df):
 
 def write_to_brms(df, suite_dir):
     outdir = Path(suite_dir)
-    outdir.mkdir(parents=True, exist_ok=True)
+
     for (sname, platform), gdf in df.groupby(["sname", "platform"]):
         su.ts_write(
             sname,
@@ -74,19 +73,21 @@ def write_to_brms(df, suite_dir):
     return outdir
 
 
-def load_write_suite_ts(
+def download_write_brms(
     date,
-    bq_loc=default_bq_test_loc,
+    bq_loc=bq.bq_locs["test"],
     history_days=365,
-    brms_dir="/tmp/brms",
-    # suite_dir="/tmp/brms/suite_data",
+    brms_dir=project_dir / "data",
 ):
-    brms_dir = Path(brms_dir)
+    assert bq.is_subdate(date)
+    brms_dir = Path(brms_dir) / date
     suite_dir = brms_dir / "suite_data"
+
+    suite_dir.mkdir(parents=True, exist_ok=True)
     (brms_dir / "brpi").mkdir(parents=True, exist_ok=True)
     (brms_dir / "br_draws").mkdir(parents=True, exist_ok=True)
 
-    df = load(date, bq_loc=bq_loc, history_days=history_days)
+    df = load_test_data(date, bq_loc=bq_loc, history_days=history_days)
     df = transform_test_data(df)
     write_to_brms(df, suite_dir=suite_dir)
 
@@ -141,11 +142,7 @@ def transform_model_posterior(suite_plats: List[me.SuitePlat]):
 
 def upload_model_input_data(
     data_inp,
-    bql=bq.BqLocation(
-        "wbeard_slow_regression_input_data_test",
-        dataset="analysis",
-        project_id="moz-fx-data-shared-prod",
-    ),
+    bq_loc=bq.bq_locs.input_data,
     replace=False,
     skip_existing=False,
 ):
@@ -154,76 +151,50 @@ def upload_model_input_data(
     sr.upload_model_input_data(df_inp)
     """
     if skip_existing:
-        existing_dates = (
-            bq.pull_existing_dates(bql).map(bq.to_subdate).pipe(set)
+        data_inp = bq.filter_existing_dates(
+            data_inp, date_col="date", bq_loc=bq_loc
         )
-        data_inp = data_inp.pipe(
-            lambda df: df[~df.date.isin(existing_dates)]
-        )
-        if not len(data_inp):
-            print("Nothing new to upload")
+        if data_inp is None:
             return
     bq.upload_cli(
         data_inp,
-        bql,
+        bq_loc,
         time_partition="date",
         add_schema=True,
         replace=replace,
     )
 
 
-def upload_model_draws(
+def upload_model_samples(
     draws,
-    bql=bq.BqLocation(
-        "wbeard_slow_regression_draws_test",
-        dataset="analysis",
-        project_id="moz-fx-data-shared-prod",
-    ),
+    bq_loc=bq.bq_locs.samples,
     replace=False,
     skip_existing=False,
 ):
     """
     draws_ul = sr.transform_model_posterior(mm.suite_plats)
-    bq.upload_cli(draws_ul, bql, time_partition='date', add_schema=True,
+    bq.upload_cli(draws_ul, bq_loc, time_partition='date', add_schema=True,
         replace=True)
     """
     if skip_existing:
-        existing_dates = (
-            bq.pull_existing_dates(bql).map(bq.to_subdate).pipe(set)
+        draws = bq.filter_existing_dates(
+            draws, date_col="date", bq_loc=bq_loc
         )
-        draws = draws.pipe(
-            lambda df: df[~df.date.isin(existing_dates)]
-        )
-        if not len(draws):
-            print("Nothing new to upload")
+        if draws is None:
             return
     bq.upload_cli(
         draws,
-        bql,
+        bq_loc,
         time_partition="date",
         add_schema=True,
         replace=replace,
     )
 
 
-def main(model_data_dir="/sreg/data/"):
-    import slow_regressions.data.gen_test_data_query as gtd
-
-    gtd.fmt_test_data_query(
-        bq.bq_query2,
-        start_date="2020-07-07",
-        # start_date=None,
-        ignore_existing=True,
-    )
-
-    # gen_test_data_query.py \
-    # --fill_yesterday=True | \
-    # bq query --use_legacy_sql=false \
-    # --destination_table="$DEST_TABLE" \
-    # --replace=true \
-    # --project_id=moz-fx-data-derived-datasets
+def upload_model_data(subdate: str, model_data_dir="/sreg/data/"):
     bv = load_beta_versions()
-    mm = me.ModelManager(model_data_dir, "2020-07-06", bv)
+    subdate_data_dir = Path(model_data_dir) / subdate
+    mm = me.ModelManager(subdate_data_dir, subdate, bv)
 
     # Upload input
     df_inp = transform_model_input_data(mm.suite_plats)
@@ -231,18 +202,18 @@ def main(model_data_dir="/sreg/data/"):
 
     # Upload samples
     draws_ul = transform_model_posterior(mm.suite_plats)
-    upload_model_draws(draws_ul, replace=False, skip_existing=True)
+    upload_model_samples(draws_ul, replace=False, skip_existing=True)
 
 
 if __name__ == "__main__":
     # currently runs from '/sreg'
     """
-    python load_write_suite_ts date='2020-07-07'
+    python -m slow_regressions.etl \
+        load_brms --date='2020-07-07'
     """
     Fire(
         {
-            "load": load_write_suite_ts,
-            "main": main,
-            # "upload_model_data": upload_model_data,
+            "load_brms": download_write_brms,
+            "upload_model_data": upload_model_data,
         }
     )

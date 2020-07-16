@@ -8,13 +8,15 @@ import pandas as pd  # type: ignore
 import pandas_gbq as pbq  # type: ignore
 
 from google.cloud.bigquery import Client
+import slow_regressions.utils.slow_reg_utils as sru
 
-analysis = "moz-fx-data-shared-prod.analysis.{}".format
+# analysis = "moz-fx-data-shared-prod.analysis.{}".format
 
-tables = dict(
-    test=analysis("wbeard_test_slow_regression_test_data"),
-    input_data=analysis("wbeard_slow_regression_input_data_test"),
-    samples=analysis("wbeard_slow_regression_draws_test"),
+
+tables = sru.AttrDict(
+    test="moz-fx-data-shared-prod.analysis.wbeard_test_slow_regression_test_data",
+    input_data="moz-fx-data-shared-prod.analysis.wbeard_slow_regression_input_data_test",
+    samples="moz-fx-data-shared-prod.analysis.wbeard_slow_regression_draws_test",
 )
 
 
@@ -38,10 +40,12 @@ def bq_upload(df, table):
     client.load_table_from_dataframe(df, table)
 
 
+@lru_cache()
 def to_subdate(d):
     return d.strftime("%Y-%m-%d")
 
 
+@lru_cache()
 def from_subdate(s):
     return dt.datetime.strptime(s, "%Y-%m-%d")
 
@@ -78,6 +82,10 @@ class BqLocation:
         return f"`{self.project_id}`.{self.dataset}.{self.table}"
 
     @property
+    def no_tick(self):
+        return f"{self.project_id}.{self.dataset}.{self.table}"
+
+    @property
     def cli(self):
         return f"{self.project_id}:{self.dataset}.{self.table}"
 
@@ -98,9 +106,9 @@ class BqLocation:
         return BqLocation(table, dataset=dataset, project_id=project)
 
 
-bq_locs = {
-    k: BqLocation.from_sql(table) for k, table in tables.items()
-}
+bq_locs = sru.AttrDict(
+    {k: BqLocation.from_sql(table) for k, table in tables.items()}
+)
 
 
 def run_command(cmd, success_msg="Success!"):
@@ -204,7 +212,9 @@ def get_schema(df, as_str=False, **override):
     return res
 
 
-def pull_existing_dates(bq_loc, date_field="date", convert_to_date=False):
+def pull_existing_dates(
+    bq_loc, date_field="date", convert_to_date=False
+):
     if convert_to_date:
         date_field = f"date({date_field})"
     q = f"""
@@ -213,3 +223,29 @@ def pull_existing_dates(bq_loc, date_field="date", convert_to_date=False):
     order by 1
     """
     return bq_query(q).iloc[:, 0]
+
+
+def filter_existing_dates(
+    df, date_col, bq_loc, convert_to_date=False, date_field="date"
+):
+    dates_to_upload = df[date_col]
+    if not is_subdate(dates_to_upload.iloc[0]):
+        print("Converting dates to strings")
+        dates_to_upload = dates_to_upload.map(to_subdate)
+
+    existing_dates = (
+        pull_existing_dates(
+            bq_loc,
+            convert_to_date=convert_to_date,
+            date_field=date_field,
+        )
+        .map(to_subdate)
+        .pipe(set)
+    )
+    bm = ~dates_to_upload.isin(existing_dates)
+    print(f"About to upload {bm.sum()} / {len(bm)} rows")
+    df = df[bm]
+    if not len(df):
+        print("Nothing new to upload")
+        return None
+    return df

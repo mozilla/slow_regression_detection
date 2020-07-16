@@ -107,10 +107,8 @@ class ModelManager:
     """
 
     """
-    def __init__(self, base_dir, date_str, beta_vers):
-        self.base = Path(base_dir)
-        # self.wed = wed
-        # self.d = self.base / wed
+    def __init__(self, subdate_data_dir, date_str, beta_vers):
+        self.base = Path(subdate_data_dir)
         self.fth_dirs = {"suite_data", "br_draws", "brpi"}
 
         self.date_str = date_str
@@ -124,7 +122,6 @@ class ModelManager:
             draws = self.load("br_draws", k).pipe(
                 self.format_draws, daterange_map=daterange_map
             )
-            # import ipdb; ipdb.set_trace()
             df = combine_data_pi(data_inp, pi)
             day2mvers = beta_vers.set_index("day").mvers.to_dict()
             df["mvers"] = df.d.map(day2mvers)

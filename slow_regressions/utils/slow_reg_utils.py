@@ -13,6 +13,22 @@ from pandas import DataFrame  # type: ignore
 # import scipy.stats as sts  # type: ignore
 # import toolz.curried as z  # type: ignore
 
+
+class AttrDict(dict):
+    """
+    Dict with attribute access of keys
+    http://stackoverflow.com/a/14620633/386279
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
+
+    def copy(self):
+        d = super().copy()
+        return AttrDict(d)
+
+
 lower_is_better = {
     "sessionrestore": True,
     "startup_about_home_paint": True,

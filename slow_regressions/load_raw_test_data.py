@@ -47,12 +47,6 @@ def fmt_test_data_query(
             end_date=end_date,
             bh_start_date=bh_start_date,
         )
-    summary = f"""start_date: {start_date}
-    end_date: {end_date}
-    bh_start_date: {bh_start_date}
-    """
-    print(summary)
-    return
 
     floc = app_dir / "data/test_data.sql"
     with open(floc, "r") as fp:
@@ -72,48 +66,60 @@ def fmt_test_data_query(
 def fmt_test_data_query_backfill(just_dates=False):
     start_date = "2019-07-01"
     q = fmt_test_data_query(
-        start_date=start_date,
         till_yesterday=True,
+        start_date=start_date,
         just_dates=just_dates,
     )
     return q
 
 
 def fmt_test_data_query_yesterday(just_dates=False):
-    yesterday = to_subdate(dt.date.today() - dt.timedelta(days=1))
     q = fmt_test_data_query(
-        end_date=yesterday, start_date=yesterday, just_dates=just_dates
+        till_yesterday=True, start_date=0, just_dates=just_dates
     )
     return q
 
 
 def extract_upload_test_data(
-    bq_query, start_date=None, ignore_existing=True
+    bq_query=None,
+    end_date=None,
+    start_date=0,
+    skip_existing=True,
+    bq_loc=bq.bq_locs.test,
 ):
     sql = fmt_test_data_query(
         till_yesterday=True,
-        fill_yesterday=False,
-        backfill=False,
-        end_date=None,
-        bh_start_date=None,
         start_date=start_date,
+        stdout=False,
+        end_date=end_date,
     )
+    bq_query = bq_query or bq.bq_query2
     df = bq_query(sql)
     # return df
-    if ignore_existing:
-        existing_dates = bq.pull_existing_dates(
-            bq.bq_locs["test"], date_field="time", convert_to_date=True
+    if skip_existing:
+        df = bq.filter_existing_dates(
+            df,
+            date_col="date",
+            bq_loc=bq_loc,
+            convert_to_date=True,
+            date_field="time",
         )
-        upload_bm = ~df.time.dt.date.isin(existing_dates.dt.date)
-        print(
-            "Duplicate rows found. Only uploading "
-            f"{upload_bm.sum()} / {len(df)}"
-        )
-        df = df[upload_bm]
+        if df is None:
+            return
 
     client = bq.get_client()
-    client.load_table_from_dataframe(df, bq.tables["test"])
+    client.load_table_from_dataframe(df, bq_loc.sql)  # no_tick?
+
+
+def get_yesterday_subdate():
+    return to_subdate(dt.date.today() - dt.timedelta(days=1))
 
 
 if __name__ == "__main__":
-    Fire(fmt_test_data_query)
+    Fire(
+        {
+            "sql": fmt_test_data_query,
+            "etl": extract_upload_test_data,
+            "yesterday": get_yesterday_subdate,
+        }
+    )
