@@ -29,12 +29,13 @@ RUN conda update anaconda
 
 # RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - && apt-get update -y && apt-get install google-cloud-sdk -y
 
-COPY env_r.yaml requirements_dev.txt /tmp
+COPY env_r.yaml requirements_dev.txt /tmp/
 RUN conda env update -n base -f /tmp/env_r.yaml
 
 # RUN pip install -r /tmp/requirements.txt
 RUN pip install -r /tmp/requirements_dev.txt
 
+WORKDIR /sreg
 # COPY denv.yaml /fission_nightly
 # RUN conda env create -f /fission_nightly/denv.yaml
 # COPY . /webrender_intel_win10_nightly 

@@ -121,4 +121,3 @@ def get_prev_vers_dates(
         # .prev_dates
     )
     return dates
-

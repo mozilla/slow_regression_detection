@@ -152,7 +152,7 @@ def upload_model_input_data(
     """
     if skip_existing:
         data_inp = bq.filter_existing_dates(
-            data_inp, date_col="date", bq_loc=bq_loc
+            data_inp, date_field="date", bq_loc=bq_loc
         )
         if data_inp is None:
             return
@@ -178,7 +178,7 @@ def upload_model_samples(
     """
     if skip_existing:
         draws = bq.filter_existing_dates(
-            draws, date_col="date", bq_loc=bq_loc
+            draws, date_field="date", bq_loc=bq_loc
         )
         if draws is None:
             return

@@ -99,7 +99,6 @@ def extract_upload_test_data(
     if skip_existing:
         df = bq.filter_existing_dates(
             df,
-            date_col="date",
             bq_loc=bq_loc,
             convert_to_date=True,
             date_field="time",
@@ -108,7 +107,7 @@ def extract_upload_test_data(
             return
 
     client = bq.get_client()
-    client.load_table_from_dataframe(df, bq_loc.sql)  # no_tick?
+    client.load_table_from_dataframe(df, bq_loc.no_tick)
 
 
 def get_yesterday_subdate():

@@ -14,9 +14,9 @@ import slow_regressions.utils.slow_reg_utils as sru
 
 
 tables = sru.AttrDict(
-    test="moz-fx-data-shared-prod.analysis.wbeard_test_slow_regression_test_data",
-    input_data="moz-fx-data-shared-prod.analysis.wbeard_slow_regression_input_data_test",
-    samples="moz-fx-data-shared-prod.analysis.wbeard_slow_regression_draws_test",
+    test="moz-fx-data-shared-prod.analysis.wbeard_test_slow_regression_test_data",  # noqa
+    input_data="moz-fx-data-shared-prod.analysis.wbeard_slow_regression_input_data_test",  # noqa
+    samples="moz-fx-data-shared-prod.analysis.wbeard_slow_regression_draws_test",  # noqa
 )
 
 
@@ -226,9 +226,9 @@ def pull_existing_dates(
 
 
 def filter_existing_dates(
-    df, date_col, bq_loc, convert_to_date=False, date_field="date"
+    df, bq_loc, convert_to_date=False, date_field="date"
 ):
-    dates_to_upload = df[date_col]
+    dates_to_upload = df[date_field]
     if not is_subdate(dates_to_upload.iloc[0]):
         print("Converting dates to strings")
         dates_to_upload = dates_to_upload.map(to_subdate)
