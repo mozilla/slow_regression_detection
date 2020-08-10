@@ -1,6 +1,26 @@
 slow_regressions
 ==============================
 
+# Shell aliases
+
+```sh
+alias db="docker build -t ds_546_prod ."
+alias dr="docker run -v=$HOME/.config/gcloud:/root/.config/gcloud -v ~/repos/sreg:/sreg -it ds_546_prod /bin/bash"
+
+
+function da () {
+    export CONTAINER=`docker container ls | pcregrep -o "^[a-z0-9]+"`
+    docker exec -it $CONTAINER /bin/bash
+}
+```
+
+
+
+# Status
+
+`python -m slow_regressions.utils.diagnose_etl dates`
+
+
 # Ipython
 
 ```
@@ -8,13 +28,28 @@ slow_regressions
 ```
 
 # Workflow
+
+## etl.sh layout
+
+- `slow_regressions.load_raw_test_data etl`
+  - Downloads summary data from
+        `moz-fx-data-derived-datasets.taskclusteretl.perfherder` to
+        temp table
+  - 
+- `python -m slow_regressions.etl load_brms --brms_dir='/sreg/data/' --date="$yesterday"`
+- `time Rscript slow_regressions/model/smod.r "/sreg/data/$yesterday/"`
+- `python -m slow_regressions.etl upload_model_data \
+      --subdate="$yesterday" --model_data_dir='/sreg/data/'`
+
+
+
 ## Upload test summaries
 
 ```python
 gtd.extract_upload_test_data(bq_query=bq.bq_query2, start_date=6)
 ```
 
-```python
+```sh
 python -m slow_regressions.load_raw_test_data etl --start_date=0
 ```
 

@@ -225,6 +225,24 @@ def pull_existing_dates(
     return bq_query(q).iloc[:, 0]
 
 
+def find_missing(test_dates, lastn=None):
+    test_dates = pd.to_datetime(pd.Series(sorted(test_dates)))
+    slen = lambda x: len(set(x))  # noqa: E731
+    start = min(test_dates)
+
+    days_till_yesterday = pd.date_range(start, dt.date.today())[:-1]
+    msg = set(days_till_yesterday) - set(pd.to_datetime(test_dates))
+
+    print(
+        f"table has {slen(test_dates)}/{slen(days_till_yesterday)} "
+        "possible dates"
+    )
+    res = pd.Series(sorted(msg), dtype=np.dtype("<M8[ns]"))
+    if not lastn:
+        return res
+    return res[-lastn:]
+
+
 def filter_existing_dates(
     df, bq_loc, convert_to_date=False, date_field="date"
 ):
