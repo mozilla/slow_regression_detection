@@ -9,6 +9,8 @@ At a high level, this project
 * arranges data by test suite and platform, performs preprocessing and outlier removal
 * fits a BRMS time series model 
 
+- [ ] TODO: latent view
+
 The primary output of this model are the MCMC samples of the BRMS model for a given day, test suite, platform combination. This allows for Bigquery calculations that, for a given test suite and platform, can make probabilistic comparisons of any day in the range.
 
 An example usage is plotted below. 
@@ -26,15 +28,14 @@ The plot on the left shows comparisons of different days in the dataset. The ref
 
 ## The intermediate tables
 
-It currently uses 3 tables, whose default locations are in [this file]
+It currently uses 3 tables, whose default locations are in the `tables` dict in [bq_utils.py](https://github.com/wcbeard/slow_regression_detection/blob/master/slow_regressions/utils/bq_utils.py).
 
-The following are example usages from them
+The following are example usages of them
 
-
-
-- [slow regressions: samples](https://sql.telemetry.mozilla.org/queries/72740/source)
-- [slow regressions: input data](https://sql.telemetry.mozilla.org/queries/72659/source)
-- [sru: compare today vs prevdays](https://sql.telemetry.mozilla.org/queries/73466/source)
+- [samples](https://sql.telemetry.mozilla.org/queries/72740/source) ([Local](doc/sample.sql))
+- [ input data](https://sql.telemetry.mozilla.org/queries/72659/source) ([Local](doc/input.sql))
+- [compare today vs prevdays](https://sql.telemetry.mozilla.org/queries/73466/source) ([Local](doc/compare_day_performance.sql))
+- [Diagnostic](doc/diagnostic.sql) (which days are filled in/missing)
 
 
 # Technical notes
@@ -42,25 +43,27 @@ The following are example usages from them
 - spline
 - Gaussian
 
-The model is a BRMS spline model, specified to have 2 knots per release cycle (it could probably do with less, but with the current 
-[bugzilla], the release flag changes the test scores half way through the cycle, so 2 flags per release allows enough flexibility).
+The model is a BRMS spline model, specified to have 2 knots per release cycle. It could probably do with fewer, but currently the `EARLY_BETA_OR_EARLIER` flag changes the test scores half way through the cycle for some tests (see [Bugzilla](https://bugzilla.mozilla.org/show_bug.cgi?id=1611809)), so 2 flags per release allows enough flexibility.
 
 The noise model with performance data is really unpredictable 
 
-- links
-  A spline model with Gaussian noise _usually_ describes the movements in performance data well. Problems largely arise with multimodality and outliers. 
+- [This repo](https://github.com/mozilla/measure-noise) is dedicated to classifying some of the noise
+- [This page](https://metrics.mozilla.com/protected/wbeard/slow_regr/distros.html) shows examples of what to expect
+
+A spline model with Gaussian noise _usually_ describes the movements in performance data well. Problems largely arise with multimodality and outliers.
 
 ## Multimodality
 
-Multimodality can lead to wider than usual credible intervals, but when there are multiple modes, identifying regressions isn't well defined IMO. The best I can do is flag how many modes there are with TODO function here
+Multimodality can lead to wider than usual credible intervals, but when there are multiple modes, identifying regressions isn't well defined IMO. The best I can do is flag how many modes there are with the [find_modes](https://github.com/wcbeard/slow_regression_detection/blob/master/slow_regressions/stats/modal.py#L38) function.
 
 ## Outliers
 
- Outliers are trickier because they vary so much depending on the test. I manually filter these using a zscore that's based on number of median absolute deviations away from the running median a point falls. To the naked eye, points that fall ~4 MAD's away appear to be outliers, but some distributions have outliers that are ~100 MADs away. What's more difficult is that some distributions have an outlier rate of ~1%, but others can have up to 5%. In order to make the model general purpose enough to accommodate the potentially hundreds of different tests, the rule of thumb I went with was to classify 
- [link]
- points more than 10 MAD's away as outliers. 
+Outliers are trickier because they vary so much depending on the test. I manually filter these using a zscore that's based on number of median absolute deviations away from the running median a point falls. To the naked eye, points that fall ~4 MAD's away appear to be outliers, but some distributions have outliers that are ~100 MADs away. What's more difficult is that some distributions have an outlier rate of ~1%, but others can have up to 5%. In order to make the model general purpose enough to accommodate the potentially hundreds of different tests, the rule of thumb I went with was to [classify](https://github.com/wcbeard/slow_regression_detection/blob/f41876327bc117351ad32b007eb40352d518a6aa/slow_regressions/etl.py#L69) points more than 5 MAD's away as outliers. 
 
- Filtering out most of the outliers this way leads to pretty nice spline fits with BRMS and Stan. The remaining problem, though, is that there are some residual outliers that can still artificially widen the credible intervals, making comparisons of performance at different points in time less meaningful. In order to correct this issue, there's currently a step 
+Filtering out most of the outliers this way leads to pretty nice spline fits with BRMS and Stan. The remaining problem, though, is that there are some residual outliers that can still artificially widen the credible intervals, making comparisons of performance at different points in time less meaningful. In order to correct this issue, there's currently a step 
+
+- [ ] TODO
+
  [link]
  that recalibrates the credible intervals so that [90%] of the data points fall within the 90% CI's.
 
@@ -189,7 +192,7 @@ python -m slow_regressions.etl upload_model_data --subdate='2020-07-07' --model_
 
 ### Python
 
-```py
+```python
 import slow_regressions.utils.model_eval as me
 import slow_regressions.etl as sr
 # import slow_regressions.utils.suite_utils as su
