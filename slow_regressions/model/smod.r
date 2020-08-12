@@ -1,6 +1,8 @@
 library(feather)
 library(tidyverse)
 library(brms)
+library(rjson)
+
 
 # # library(data.table)
 # # library(bayesplot)
@@ -20,7 +22,8 @@ getScriptPath <- function(){
 }
 
 here.loc = getScriptPath()
-source(paste0(here.loc, '/', "stan_utility.r"))
+# source(paste0(here.loc, '/', "stan_utility.r"))
+source(paste0(here.loc, '/', "stan_utility_diag.r"))
 
 
 args <- commandArgs(trailingOnly = TRUE)
@@ -135,25 +138,24 @@ for (filename in files) {
     sink();
   }
 
-  check_all_diagnostics(model$fit)
+  # check_all_diagnostics(model$fit)
+  diagnostics_json = toJSON(check(model$fit))
   pi <- get_pis(model, all.days)
   draws <- brms::posterior_predict(model, newdata = all.days)
   draws <- thin(draws)
 
-  fn2 = paste0('brpi/', basename(filename))
-  fn.draws = paste0('br_draws/', basename(filename))
+  suite_fname = basename(filename)
+  fn2 = paste0('brpi/', suite_fname)
+  fn.draws = paste0('br_draws/', suite_fname)
+  fn.json = paste0('json/', suite_fname, '.json')
+  
+
   print("=>")
   print(fn2)
+  writeLines(diagnostics_json, fn.json)
   write_feather(data.frame(pi), fn2)
   write_feather(data.frame(draws), fn.draws)
 
 }
 
 
-
-# fit1 = update(fit_empty, newdata=df, recompile = FALSE, cores = 4)
-# fit2 = update(fit_empty, newdata=df, recompile = FALSE, cores = 4)
-
-# marginal_effects(fit1)
-
-# Sys.sleep(30)

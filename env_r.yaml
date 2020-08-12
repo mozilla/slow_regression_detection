@@ -17,6 +17,7 @@ dependencies:
 - r-rstantools=2.0.0
 - r-tidyverse
 - r-feather  # =0.3.5
+- r-rjson
 
 # - r-loo=2.2.0
 # # - r-data.table  # =1.12.8

@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 # import tempfile
 from typing import List
@@ -11,8 +12,6 @@ import slow_regressions.utils.bq_utils as bq
 from slow_regressions.utils import suite_utils as su
 import slow_regressions.utils.beta_versions as bv
 import slow_regressions.utils.model_eval as me
-
-import pysnooper
 
 SUBDATE = str  # should be of format "%Y-%m-%d"
 
@@ -86,6 +85,7 @@ def download_write_brms(
     suite_dir.mkdir(parents=True, exist_ok=True)
     (brms_dir / "brpi").mkdir(parents=True, exist_ok=True)
     (brms_dir / "br_draws").mkdir(parents=True, exist_ok=True)
+    (brms_dir / "json").mkdir(parents=True, exist_ok=True)
 
     df = load_test_data(date, bq_loc=bq_loc, history_days=history_days)
     df = transform_test_data(df)
@@ -93,7 +93,9 @@ def download_write_brms(
 
 
 def transform_model_input_data(suite_plats: List[me.SuitePlat]):
-    norm_time = lambda ts: ts.dt.tz_localize(None).dt.round("ms")
+    def norm_time(ts):
+        return ts.dt.tz_localize(None).dt.round("ms")
+
     data_input_upload = (
         pd.concat(
             [
@@ -106,23 +108,37 @@ def transform_model_input_data(suite_plats: List[me.SuitePlat]):
             axis=0,
             ignore_index=True,
         )
-        .rename(columns={"d": "date"})
+        .rename(
+            columns={
+                "d": "date",
+                "dayi": "day_int",
+                "mvers": "major_version",
+            }
+        )
         .assign(time=lambda df: norm_time(df.time))
     )
 
     return data_input_upload
 
 
-def transform_model_posterior_suite_plat(dr, suite, platform):
-    # dr = spi.draws[:100]
-    dr.columns.name = "date"
-    dr.index.name = "index"
+def transform_model_posterior_suite_plat(
+    draws, diagnostic, suite, platform
+):
+    # draws = spi.draws[:100]
+    draws.columns.name = "date"
+    draws.index.name = "index"
     tall = (
-        dr.stack()
+        draws.stack()
         .reset_index(drop=0)
         .rename(columns={0: "y"})
-        .assign(suite=suite, platform=platform.replace("_", "-"))
+        .assign(
+            suite=suite,
+            platform=platform.replace("_", "-"),
+            diagnostic="",
+        )
     )
+    most_recent_date_ix = pd.to_datetime(tall.date).argmax()
+    tall.loc[most_recent_date_ix, "diagnostic"] = json.dumps(diagnostic)
     return tall
 
 
@@ -130,7 +146,7 @@ def transform_model_posterior(suite_plats: List[me.SuitePlat]):
     data_input_upload = pd.concat(
         [
             transform_model_posterior_suite_plat(
-                spi.draws, spi.suite, spi.platform
+                spi.draws, spi.diagnostic_data, spi.suite, spi.platform
             )
             for spi in suite_plats
         ],

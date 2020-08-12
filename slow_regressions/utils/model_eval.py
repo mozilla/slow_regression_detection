@@ -6,6 +6,7 @@ import attr
 import pandas as pd  # type: ignore
 import numpy as np  # type: ignore
 import scipy.stats as sts  # type: ignore
+import json
 
 from slow_regressions.utils import beta_versions as bv
 from slow_regressions.stats import modal
@@ -92,6 +93,7 @@ class SuitePlat:
     pi = attr.ib()
     draws = attr.ib()
     df = attr.ib()
+    diagnostic_data = attr.ib()
     # return k, data_inp, daterange_map, pi, draws, df
 
     @property
@@ -107,6 +109,7 @@ class ModelManager:
     """
 
     """
+
     def __init__(self, subdate_data_dir, date_str, beta_vers):
         self.base = Path(subdate_data_dir)
         self.fth_dirs = {"suite_data", "br_draws", "brpi"}
@@ -117,18 +120,29 @@ class ModelManager:
 
         def fmt_k(k):
             data_inp = self.load("suite_data", k)
+
+            # Model input
             daterange_map = self.get_dayi2date(df=data_inp)
             pi = self.load("brpi", k).pipe(process_pi)
             draws = self.load("br_draws", k).pipe(
                 self.format_draws, daterange_map=daterange_map
             )
             df = combine_data_pi(data_inp, pi)
+            with open(self.base / f"json/ts-{k}.fth.json", "r") as fp:
+                json_dct = json.load(fp)
+
+            # Add mvers to combined model data
             day2mvers = beta_vers.set_index("day").mvers.to_dict()
             df["mvers"] = df.d.map(day2mvers)
+
+            # Input data
             data_inp["mvers"] = data_inp.d.map(day2mvers)
-            data_inp["n_modes"] = data_inp.groupby(
-                ["mvers"]
-            ).y.transform(modal.n_modes).fillna(-1).astype(int)
+            data_inp["n_modes"] = (
+                data_inp.groupby(["mvers"])
+                .y.transform(modal.n_modes)
+                .fillna(-1)
+                .astype(int)
+            )
             sp = SuitePlat(
                 k=k,
                 data_inp=data_inp,
@@ -136,6 +150,7 @@ class ModelManager:
                 pi=pi,
                 draws=draws,
                 df=df,
+                diagnostic_data=json_dct,
             )
             return sp
 

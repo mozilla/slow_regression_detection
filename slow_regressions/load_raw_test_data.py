@@ -87,6 +87,11 @@ def extract_upload_test_data(
     skip_existing=True,
     bq_loc=bq.bq_locs.test,
 ):
+    """
+    Download summary data from
+    `moz-fx-data-derived-datasets.taskclusteretl.perfherder` to
+    temp table.
+    """
     sql = fmt_test_data_query(
         till_yesterday=True,
         start_date=start_date,

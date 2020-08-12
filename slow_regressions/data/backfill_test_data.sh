@@ -10,5 +10,7 @@ python gen_test_data_query.py \
     --backfill=True | \
     bq query --use_legacy_sql=false \
     --destination_table="$DEST_TABLE" \
-    --replace=true \
     --project_id=moz-fx-data-derived-datasets
+
+
+        # --replace=true \
