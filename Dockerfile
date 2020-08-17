@@ -1,5 +1,4 @@
 FROM continuumio/anaconda3
-# FROM rocker/verse:3.5.0
 # RUN mkdir /tmp/output/
 
 # RUN R -e "options(repos = list(CRAN = 'https://cran.microsoft.com/snapshot/2020-04-10/')); \
@@ -33,14 +32,10 @@ COPY env_r.yaml /tmp/
 RUN conda env update -n base -f /tmp/env_r.yaml
 
 COPY requirements_dev.txt /tmp/
-RUN pip install -r /tmp/requirements_dev.txt
+# RUN pip install -r /tmp/requirements_dev.txt
 
 WORKDIR /sreg
-# COPY denv.yaml /fission_nightly
-# RUN conda env create -f /fission_nightly/denv.yaml
-# COPY . /webrender_intel_win10_nightly 
 
-# RUN echo "project_id = moz-fx-ds-283" > /root/.bigqueryrc
 # RUN echo "project_id = moz-fx-data-shared-prod" > /root/.bigqueryrc
 
 CMD /bin/bash etl.sh
