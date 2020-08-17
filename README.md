@@ -9,8 +9,6 @@ At a high level, this project
 * arranges data by test suite and platform, performs preprocessing and outlier removal
 * fits a BRMS time series model 
 
-- [ ] TODO: latent view
-
 The primary output of this model are the MCMC samples of the BRMS model for a given day, test suite, platform combination. This allows for Bigquery calculations that, for a given test suite and platform, can make probabilistic comparisons of any day in the range.
 
 An example usage is plotted below. 
@@ -24,7 +22,6 @@ On the right is a plot of the individual test scores over time, represented as c
 
 The plot on the left shows comparisons of different days in the dataset. The reference date was 'today,' and the comparison dates were 7 days ago, 14 days ago, and the last day of the 2 previous versions (version 74 and 75). Using the MCMC samples, it's possible with the query to subtract today's samples from the samples for 7 days ago, and get a probability distribution over the difference in performance between the days. A threshold can then be chosen for alerting (say, when there's an 80% chance that we're worse today than we were last week).
 
-? A fact that complicates the layout of this __ is that a separate model is built 
 
 ## The intermediate tables
 
@@ -33,15 +30,12 @@ It currently uses 3 tables, whose default locations are in the `tables` dict in 
 The following are example usages of them
 
 - [samples](https://sql.telemetry.mozilla.org/queries/72740/source) ([Local](doc/sample.sql))
-- [ input data](https://sql.telemetry.mozilla.org/queries/72659/source) ([Local](doc/input.sql))
+- [input data](https://sql.telemetry.mozilla.org/queries/72659/source) ([Local](doc/input.sql))
 - [compare today vs prevdays](https://sql.telemetry.mozilla.org/queries/73466/source) ([Local](doc/compare_day_performance.sql))
 - [Diagnostic](doc/diagnostic.sql) (which days are filled in/missing)
 
 
 # Technical notes
-
-- spline
-- Gaussian
 
 The model is a BRMS spline model, specified to have 2 knots per release cycle. It could probably do with fewer, but currently the `EARLY_BETA_OR_EARLIER` flag changes the test scores half way through the cycle for some tests (see [Bugzilla](https://bugzilla.mozilla.org/show_bug.cgi?id=1611809)), so 2 flags per release allows enough flexibility.
 
@@ -60,14 +54,9 @@ Multimodality can lead to wider than usual credible intervals, but when there ar
 
 Outliers are trickier because they vary so much depending on the test. I manually filter these using a zscore that's based on number of median absolute deviations away from the running median a point falls. To the naked eye, points that fall ~4 MAD's away appear to be outliers, but some distributions have outliers that are ~100 MADs away. What's more difficult is that some distributions have an outlier rate of ~1%, but others can have up to 5%. In order to make the model general purpose enough to accommodate the potentially hundreds of different tests, the rule of thumb I went with was to [classify](https://github.com/wcbeard/slow_regression_detection/blob/f41876327bc117351ad32b007eb40352d518a6aa/slow_regressions/etl.py#L69) points more than 5 MAD's away as outliers. 
 
-Filtering out most of the outliers this way leads to pretty nice spline fits with BRMS and Stan. The remaining problem, though, is that there are some residual outliers that can still artificially widen the credible intervals, making comparisons of performance at different points in time less meaningful. In order to correct this issue, there's currently a step 
+Filtering out most of the outliers this way leads to pretty nice spline fits with BRMS and Stan. The remaining problem, though, is that there are some residual outliers that can still artificially widen the credible intervals, making comparisons of performance at different points in time less meaningful. In order to correct this issue, there's currently a step that recalibrates the credible intervals so that [90%] of the data points fall within the 90% CI's.
 
-- [ ] TODO
-
- [link]
- that recalibrates the credible intervals so that [90%] of the data points fall within the 90% CI's.
-
- This works because the model assumes homoscedastic noise.
+This works because the model assumes homoscedastic noise.
 
 
 ### Potential future improvements 
@@ -91,7 +80,6 @@ nu, loc, scale = sts.t.fit(res)
 ```
 
 
-
 - if a model is fit on Monday, and then again on Tuesday, 
 
 
@@ -110,8 +98,9 @@ docker run -v=$GCLOUD_CREDS:/root/.config/gcloud -v $SR_LOCATION:/sreg --interac
 ```
 
 
+## Sundry notes
 
-* Shell aliases
+### Shell aliases
 
 ```sh
 alias db="docker build -t ds_546_prod ."
@@ -124,81 +113,34 @@ function da () {
 }
 ```
 
-
-
-# Status
+### Status
 
 `python -m slow_regressions.utils.diagnose_etl dates`
 
 
-# Ipython
+### Ipython
 
 ```
 %run slow_regressions/ipyimp.py
 ```
 
-# Workflow
+### Workflow
 
-## etl.sh layout
+#### etl.sh layout
 
 - `slow_regressions.load_raw_test_data etl`
   - Downloads summary data from
         `moz-fx-data-derived-datasets.taskclusteretl.perfherder` to
         temp table
-  - 
 - `python -m slow_regressions.etl load_brms --brms_dir='/sreg/data/' --date="$yesterday"`
+    - pulls summarized data, splits it out by suite, does some preprocessing,
+    saves it to local directory that R can read from
 - `time Rscript slow_regressions/model/smod.r "/sreg/data/$yesterday/"`
+    - Run the R model on local data, and save MCMC samples locally
 - `python -m slow_regressions.etl upload_model_data \
       --subdate="$yesterday" --model_data_dir='/sreg/data/'`
-
-
-
-## Upload test summaries
-
-```python
-gtd.extract_upload_test_data(bq_query=bq.bq_query2, start_date=6)
-```
-
-```sh
-python -m slow_regressions.load_raw_test_data etl --start_date=0
-```
-
-
-
-```sh
-bash slow_regressions/data/load_test_data.sh
-```
-
-## Download test data
-
-```python
-import slow_regressions.etl as sr
-df_ = sr.load('2020-07-06')
-df = sr.transform_test_data(df_)
-sr.load_write_suite_ts('2020-07-06')
-```
-
-### CLI
-
-```sh
-python -m slow_regressions.etl load_brms --brms_dir='/sreg/data/' --date='2020-07-07'
-```
-
-## Run R model
-
-```sh
-cd /sreg
-time Rscript slow_regressions/model/smod.r /sreg/data/2020-07-07/
-```
-
-## Post model building
-
-### CLI
-
-```sh
-python -m slow_regressions.etl upload_model_data --subdate='2020-07-07' --model_data_dir='/sreg/data/'
-```
-
+    - read MCMC samples and the preprocessed data that was fed into the model,
+        upload it to BQ
 
 
 ### Python
