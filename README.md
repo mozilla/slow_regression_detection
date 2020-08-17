@@ -92,15 +92,26 @@ nu, loc, scale = sts.t.fit(res)
 
 
 
-# How to run the model
-
-
-# Potential future improvements 
-
 - if a model is fit on Monday, and then again on Tuesday, 
 
 
-# Shell aliases
+
+# How to run the model
+
+```bash
+git clone https://github.com/wcbeard/slow_regression_detection.git slow_reg
+export SR_LOCATION="$(pwd)/slow_reg"
+export GCLOUD_CREDS="$HOME/.config/gcloud"
+
+cd $SR_LOCATION
+docker build --tag ds_546_prod .
+docker run -v=$GCLOUD_CREDS:/root/.config/gcloud -v $SR_LOCATION:/sreg --interactive --tty ds_546_prod
+
+```
+
+
+
+* Shell aliases
 
 ```sh
 alias db="docker build -t ds_546_prod ."
