@@ -86,6 +86,12 @@ nu, loc, scale = sts.t.fit(res)
 
 # How to run the model
 
+To run locally:
+1. Ensure Docker has at least 8GB memory. This could be overkill, but the Stan models are voracious
+2. Ensure BigQuery credentials exist. Run the following from the CLI:
+   - `gcloud auth application-default login`
+
+Next, run the following CLI commands to clone the repo, set a few paths, and build and run Docker.
 ```bash
 git clone https://github.com/wcbeard/slow_regression_detection.git slow_reg
 export SR_LOCATION="$(pwd)/slow_reg"
@@ -96,7 +102,6 @@ docker build --tag ds_546_prod .
 docker run -v=$GCLOUD_CREDS:/root/.config/gcloud -v $SR_LOCATION:/sreg --interactive --tty ds_546_prod
 
 ```
-
 
 ## Sundry notes
 
